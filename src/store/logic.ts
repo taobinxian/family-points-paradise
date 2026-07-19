@@ -25,7 +25,7 @@ function dateOf(iso: string): string {
   return iso.slice(0, 10)
 }
 
-/** 判断 ISO 时间是否落在最近 7 天（含今天，基于 APP_TODAY） */
+/** 判断 ISO 时间是否落在最近 7 天（含今天） */
 export function isThisWeek(iso: string): boolean {
   const diff = diffDays(todayStr(), dateOf(iso))
   return diff >= 0 && diff < 7
@@ -178,7 +178,7 @@ function addLedger(
   tag: LedgerTag,
   description: string,
 ): AppState {
-  // 时间戳的日期锚定 APP_TODAY，时钟用真实时间以保证排序
+  // 时间戳的日期锚定今天，时钟用真实时间以保证排序
   const entry: LedgerEntry = {
     id: genId('l'),
     memberId,
@@ -327,6 +327,21 @@ export function deletePrize(state: AppState, prizeId: string): AppState {
     prizes: state.prizes.filter((p) => p.id !== prizeId),
     redemptions: state.redemptions.filter((r) => r.prizeId !== prizeId),
   })
+}
+
+/** 新增/编辑奖品（家长自定义兑换项：虚拟奖励的名称/消耗积分/兑换价值等） */
+export function upsertPrize(state: AppState, prize: Prize): AppState {
+  const exists = state.prizes.some((p) => p.id === prize.id)
+  return withState(state, {
+    prizes: exists
+      ? state.prizes.map((p) => (p.id === prize.id ? prize : p))
+      : [...state.prizes, prize],
+  })
+}
+
+/** 生成一个新的虚拟兑换项（全员可兑，默认每次 1 分） */
+export function newVirtualReward(name: string, cost: number, rewardValue: string, emoji = '🎁'): Prize {
+  return { id: genId('v'), kind: 'virtual', name, emoji, cost, memberId: null, rewardValue }
 }
 
 // ---- 成员管理 ----

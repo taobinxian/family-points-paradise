@@ -14,12 +14,16 @@ import {
   upsertMember,
   adjustPoints,
   genId,
+  virtualRewards,
+  upsertPrize,
+  deletePrize,
+  newVirtualReward,
 } from '../store/logic'
 import { Card, Badge, Button, PillTabs, Modal, EmptyState } from '../components/ui'
 import { IconLock, IconTrash, IconPlus } from '../components/icons'
-import type { TaskRule } from '../types'
+import type { TaskRule, Prize } from '../types'
 
-type Tab = 'checkins' | 'redemptions' | 'tasks' | 'members' | 'adjust'
+type Tab = 'checkins' | 'redemptions' | 'rewards' | 'tasks' | 'members' | 'adjust'
 
 export function ParentPanel() {
   const { state } = useStore()
@@ -109,6 +113,7 @@ function AdminPanel() {
           tabs={[
             { key: 'checkins', label: `待确认打卡${pendCk ? ` (${pendCk})` : ''}` },
             { key: 'redemptions', label: `待审核兑换${pendRd ? ` (${pendRd})` : ''}` },
+            { key: 'rewards', label: '兑换设置' },
             { key: 'tasks', label: '任务管理' },
             { key: 'members', label: '成员管理' },
             { key: 'adjust', label: '积分调整' },
@@ -117,6 +122,7 @@ function AdminPanel() {
       </div>
       {tab === 'checkins' && <CheckinsTab />}
       {tab === 'redemptions' && <RedemptionsTab />}
+      {tab === 'rewards' && <RewardsTab />}
       {tab === 'tasks' && <TasksTab />}
       {tab === 'members' && <MembersTab />}
       {tab === 'adjust' && <AdjustTab />}
@@ -232,6 +238,154 @@ function RedemptionsTab() {
           </Card>
         )
       })}
+    </div>
+  )
+}
+
+const REWARD_EMOJI = ['🕹️', '🎁', '📺', '🍦', '🍟', '🎮', '🧸', '📱', '🎬', '🎡', '🛝', '💰']
+
+// 兑换设置：家长自定义虚拟兑换项（名称 / emoji / 每次消耗积分 / 兑换价值）
+function RewardsTab() {
+  const { state, mutate, toast } = useStore()
+  const [open, setOpen] = useState(false)
+  const [editing, setEditing] = useState<Prize | null>(null)
+  const rewards = virtualRewards(state)
+
+  const startNew = () => {
+    setEditing(newVirtualReward('', 1, '', '🕹️'))
+    setOpen(true)
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-slate-400">自定义「积分兑换」项：设置每次消耗多少积分、兑换到什么</p>
+        <Button onClick={startNew}>
+          <IconPlus width={18} height={18} /> 新增兑换项
+        </Button>
+      </div>
+
+      {rewards.length === 0 ? (
+        <Card className="p-4">
+          <EmptyState emoji="🎁" text="还没有兑换项，点右上角新增一个吧" />
+        </Card>
+      ) : (
+        rewards.map((v) => (
+          <Card key={v.id} className="flex items-center justify-between p-4">
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">{v.emoji}</span>
+              <div>
+                <div className="font-semibold text-slate-800">{v.name}</div>
+                <div className="flex items-center gap-2 text-xs text-slate-400">
+                  <Badge tone="indigo">每次 {v.cost} 积分</Badge>
+                  {v.rewardValue && <span>兑换：{v.rewardValue}</span>}
+                </div>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant="soft"
+                onClick={() => {
+                  setEditing(v)
+                  setOpen(true)
+                }}
+              >
+                编辑
+              </Button>
+              <Button
+                variant="ghost"
+                className="!text-rose-500 hover:!bg-rose-50"
+                onClick={() => {
+                  mutate((s) => deletePrize(s, v.id))
+                  toast('兑换项已删除', 'info')
+                }}
+              >
+                <IconTrash width={16} height={16} />
+              </Button>
+            </div>
+          </Card>
+        ))
+      )}
+
+      <Modal
+        open={open && !!editing}
+        onClose={() => setOpen(false)}
+        title={state.prizes.some((p) => p.id === editing?.id) ? '编辑兑换项' : '新增兑换项'}
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setOpen(false)}>
+              取消
+            </Button>
+            <Button
+              onClick={() => {
+                if (!editing || !editing.name.trim()) {
+                  toast('请填写兑换项名称', 'error')
+                  return
+                }
+                if (!Number.isFinite(editing.cost) || editing.cost <= 0) {
+                  toast('每次消耗积分需大于 0', 'error')
+                  return
+                }
+                mutate((s) => upsertPrize(s, { ...editing, name: editing.name.trim() }))
+                setOpen(false)
+                toast('兑换项已保存')
+              }}
+            >
+              保存
+            </Button>
+          </>
+        }
+      >
+        {editing && (
+          <div className="space-y-4">
+            <Field label="名称">
+              <input
+                value={editing.name}
+                onChange={(e) => setEditing({ ...editing, name: e.target.value })}
+                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-400"
+                placeholder="如：积分兑换游戏时间"
+              />
+            </Field>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="每次消耗积分">
+                <input
+                  type="number"
+                  value={editing.cost}
+                  onChange={(e) => setEditing({ ...editing, cost: parseInt(e.target.value, 10) || 0 })}
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-400"
+                />
+              </Field>
+              <Field label="兑换价值">
+                <input
+                  value={editing.rewardValue ?? ''}
+                  onChange={(e) => setEditing({ ...editing, rewardValue: e.target.value })}
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-400"
+                  placeholder="如：30 分钟 / 1 元"
+                />
+              </Field>
+            </div>
+            <Field label="图标">
+              <div className="flex flex-wrap gap-2">
+                {REWARD_EMOJI.map((e) => (
+                  <button
+                    key={e}
+                    onClick={() => setEditing({ ...editing, emoji: e })}
+                    className={
+                      'flex h-9 w-9 items-center justify-center rounded-lg border text-lg ' +
+                      (editing.emoji === e ? 'border-indigo-400 bg-indigo-50' : 'border-slate-200')
+                    }
+                  >
+                    {e}
+                  </button>
+                ))}
+              </div>
+            </Field>
+            <p className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-400">
+              提示：孩子在「奖品池 → 虚拟奖励」按此设置兑换，可兑次数 = 可用积分 ÷ 每次消耗。
+            </p>
+          </div>
+        )}
+      </Modal>
     </div>
   )
 }

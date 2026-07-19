@@ -29,6 +29,9 @@ import {
   prizeStatus,
   virtualRewards,
   addWish,
+  upsertPrize,
+  newVirtualReward,
+  deletePrize,
   upsertTask,
   deleteTask,
 } from './logic'
@@ -264,6 +267,25 @@ test('种子昨日日期正确，每周柱状图 周五1 周六4', () => {
   const summary = statSummary(s, 'm_rk', 'week')
   assert.equal(summary.completions, 5, '本周完成次数应为 5')
   assert.equal(summary.rejected, 0, '本周已驳回应为 0（驳回申请在 8 天前）')
+})
+
+// 意图：家长自定义兑换项 —— 新增/编辑虚拟奖励，改「每次消耗积分」即改兑换比例，影响可兑次数
+test('自定义兑换项：增改虚拟奖励，消耗积分决定可兑次数', () => {
+  let s = createSeedState() // 陶睿楷 25 分
+  const before = virtualRewards(s).length
+  // 新增一个 5 分兑一次的兑换项
+  const nv = newVirtualReward('积分兑换看电视', 5, '30 分钟', '📺')
+  s = upsertPrize(s, nv)
+  assert.equal(virtualRewards(s).length, before + 1)
+  assert.equal(redeemableCount(s, 'm_rk', nv), 5, '25 分 / 每次 5 分 = 5 次')
+  // 编辑：把每次消耗改成 10 分 → 可兑次数变 2
+  s = upsertPrize(s, { ...nv, cost: 10 })
+  const edited = virtualRewards(s).find((p) => p.id === nv.id)!
+  assert.equal(edited.cost, 10)
+  assert.equal(redeemableCount(s, 'm_rk', edited), 2, '25 分 / 每次 10 分 = 2 次')
+  // 删除
+  s = deletePrize(s, nv.id)
+  assert.equal(virtualRewards(s).length, before)
 })
 
 // 意图：每日刷新 —— 跨天后今日打卡清单归零、往日打卡进历史、累计总分不变、新打卡记到新日期
