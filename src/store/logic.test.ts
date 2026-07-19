@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict'
 import { addDays, diffDays, weekdayIndex, weekdayLabel, shortLabel } from '../lib/date'
 import { weeklyBars, statSummary } from './stats'
+import { __setTodayForTest, todayStr, daysAgo } from '../data/constants'
 import { createSeedState } from '../data/seed'
+
+// 固定"今天"以获得确定性（否则种子按真实日期生成，断言随运行日漂移）
+__setTodayForTest('2026-07-18')
 import {
   memberTotal,
   todayEarned,
@@ -260,6 +264,30 @@ test('种子昨日日期正确，每周柱状图 周五1 周六4', () => {
   const summary = statSummary(s, 'm_rk', 'week')
   assert.equal(summary.completions, 5, '本周完成次数应为 5')
   assert.equal(summary.rejected, 0, '本周已驳回应为 0（驳回申请在 8 天前）')
+})
+
+// 意图：每日刷新 —— 跨天后今日打卡清单归零、往日打卡进历史、累计总分不变、新打卡记到新日期
+test('每日刷新：跨天后今日进度归零，往日打卡进历史', () => {
+  const s = createSeedState() // 在 2026-07-18 生成，当天 4/5
+  assert.equal(todayProgress(s, 'm_rk').done, 4, '种子当天今日完成 4')
+  assert.equal(todayEarned(s, 'm_rk'), 25, '种子当天今日积分 25')
+
+  __setTodayForTest('2026-07-19') // 时间来到新的一天
+  assert.equal(todayProgress(s, 'm_rk').done, 0, '新的一天今日完成归零')
+  assert.equal(todayProgress(s, 'm_rk').rate, 0, '完成率归零')
+  assert.equal(todayEarned(s, 'm_rk'), 0, '新的一天今日积分归零')
+  assert.equal(completionStatusFor(s, 'm_rk', 't_run'), 'none', '任务重新变为未打卡')
+  assert.equal(memberTotal(s, 'm_rk'), 25, '累计总分不受跨天影响')
+
+  // 新的一天打卡 → 记到 07-19
+  const s2 = checkInTask(s, 'm_rk', 't_run')
+  const cp = s2.completions.find(
+    (c) => c.memberId === 'm_rk' && c.taskId === 't_run' && c.status === 'pending',
+  )!
+  assert.equal(cp.date, '2026-07-19', '新打卡记到新日期')
+  assert.equal(daysAgo(0), todayStr()) // 自洽性
+
+  __setTodayForTest('2026-07-18') // 复原，避免影响其它测试
 })
 
 console.log(`\n家庭积分乐园 · 逻辑单测全部通过：${passed} 项\n`)

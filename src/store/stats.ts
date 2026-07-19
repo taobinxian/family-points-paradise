@@ -1,13 +1,14 @@
 import type { AppState, MemberId } from '../types'
 import { taskById } from './logic'
-import { APP_TODAY, CHART_COLORS, shortDate } from '../data/constants'
+import { CHART_COLORS, shortDate, todayStr } from '../data/constants'
 import { addDays, diffDays, sameMonth, weekdayIndex } from '../lib/date'
 
 export type Period = 'week' | 'month'
 
 function dateInPeriod(date: string, period: Period): boolean {
-  if (period === 'month') return sameMonth(date, APP_TODAY)
-  const diff = diffDays(APP_TODAY, date)
+  const today = todayStr()
+  if (period === 'month') return sameMonth(date, today)
+  const diff = diffDays(today, date)
   return diff >= 0 && diff < 7
 }
 
@@ -32,7 +33,8 @@ const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
 /** 每周完成情况：本周 Sun–Sat 每天已确认打卡数 */
 export function weeklyBars(state: AppState, memberId: MemberId): { day: string; count: number }[] {
-  const sunday = addDays(APP_TODAY, -weekdayIndex(APP_TODAY))
+  const today = todayStr()
+  const sunday = addDays(today, -weekdayIndex(today))
   return WEEKDAYS.map((day, i) => {
     const ds = addDays(sunday, i)
     const count = state.completions.filter(
@@ -67,8 +69,9 @@ export function categoryDistribution(
 /** 积分趋势：最近 7 天每日净积分 */
 export function pointsTrend(state: AppState, memberId: MemberId): { date: string; points: number }[] {
   const out: { date: string; points: number }[] = []
+  const today = todayStr()
   for (let i = 6; i >= 0; i--) {
-    const ds = addDays(APP_TODAY, -i)
+    const ds = addDays(today, -i)
     const points = state.ledger
       .filter((l) => l.memberId === memberId && l.createdAt.slice(0, 10) === ds)
       .reduce((s, l) => s + l.points, 0)

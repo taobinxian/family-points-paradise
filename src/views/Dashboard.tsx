@@ -13,7 +13,7 @@ import {
   memberById,
   checkInTask,
 } from '../store/logic'
-import { APP_TODAY } from '../data/constants'
+import { todayStr } from '../data/constants'
 import { navigate } from '../router'
 import { Card, StatCard, Button, Badge, SectionTitle, EmptyState, Modal } from '../components/ui'
 import {
@@ -50,7 +50,7 @@ export function Dashboard() {
             {member.avatar} {member.name} 的积分大盘
           </h1>
           <p className="mt-1 text-sm text-slate-400">
-            {APP_TODAY} · 当前查看：{member.name}
+            {todayStr()} · 当前查看：{member.name}
           </p>
         </div>
         <Button onClick={() => setQuickOpen(true)}>
